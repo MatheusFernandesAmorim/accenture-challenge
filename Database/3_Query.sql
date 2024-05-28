@@ -1,0 +1,77 @@
+USE AccentureChallenge
+GO
+------------------------------------------------------------------------------------------------------------
+-- Step 1: Declares variables
+------------------------------------------------------------------------------------------------------------
+DECLARE @TABLE_TOP_FIVE_CUSTOMERS AS TABLE (
+CUSTOMER_ID INT NOT NULL
+, CUSTOMER_NAME VARCHAR(50)
+, SUM_AMOUNT DECIMAL (10,2)
+, CHECKED BIT NOT NULL
+)
+
+DECLARE @TABLE_PURCHASE_DETAILS AS TABLE (
+CUSTOMER_ID VARCHAR(50) NULL
+, CUSTOMER_NAME VARCHAR(50) NULL
+, TOTAL_AMOUNT_SPENT VARCHAR(50) NULL
+, PRODUCT_NAME VARCHAR(50) NULL
+, PRODUCT_UNITS VARCHAR(50) NULL
+, PRODUCT_PRICE VARCHAR(50) NULL
+, TOTAL_PRODUCT_PRICE VARCHAR(50) NULL
+)
+
+DECLARE @TEXT_LINE VARCHAR(30) = REPLICATE('-', 30)
+------------------------------------------------------------------------------------------------------------
+-- Step 2: Retrives the top five expenders in the last six months
+------------------------------------------------------------------------------------------------------------
+INSERT INTO @TABLE_TOP_FIVE_CUSTOMERS
+SELECT TOP 5
+	CUST.ID AS CUSTOMER_ID
+	, CUST.FULL_NAME AS CUSTOMER_NAME
+	, SUM(ORDE.TOTAL_AMOUNT) AS SUM_AMOUNT
+	, 0
+FROM 
+	CUSTOMERS AS CUST
+	INNER JOIN ORDERS AS ORDE
+		ON CUST.ID = ORDE.CUSTOMER_ID
+WHERE
+	DATEDIFF(MM, ORDE.ORDER_DATE, GETDATE()) <= 6
+GROUP BY
+	CUST.ID
+	, CUST.FULL_NAME
+ORDER BY 
+	SUM_AMOUNT DESC
+------------------------------------------------------------------------------------------------------------
+-- Step 3: Shows the purchase details of each customer
+------------------------------------------------------------------------------------------------------------
+WHILE (SELECT COUNT(CUSTOMER_ID) FROM @TABLE_TOP_FIVE_CUSTOMERS WHERE CHECKED = 0) > 0
+BEGIN
+	DECLARE @ID_CUSTOMER INT = (SELECT TOP 1 CUSTOMER_ID FROM @TABLE_TOP_FIVE_CUSTOMERS WHERE CHECKED = 0)
+
+	-- Sets the lines about customer
+	INSERT INTO @TABLE_PURCHASE_DETAILS 
+	SELECT CUSTOMER_ID, CUSTOMER_NAME, SUM_AMOUNT, @TEXT_LINE, @TEXT_LINE, @TEXT_LINE, @TEXT_LINE FROM @TABLE_TOP_FIVE_CUSTOMERS WHERE CUSTOMER_ID = @ID_CUSTOMER
+
+	-- Sets the line about purchase details
+	INSERT INTO @TABLE_PURCHASE_DETAILS (PRODUCT_NAME, PRODUCT_PRICE, PRODUCT_UNITS, TOTAL_PRODUCT_PRICE)
+	SELECT 
+		PROD.FULL_NAME AS PRODUCT_NAME
+		, ORIT.PRICE AS PRODUCT_PRICE
+		, ORIT.QUANTITY AS PRODUCT_UNITS
+		, (ORIT.PRICE * ORIT.QUANTITY) AS TOTAL_PRODUCT_PRICE
+	FROM
+		ORDERS AS ORDE
+		INNER JOIN ORDER_ITEMS AS ORIT
+			ON ORIT.ORDER_ID = ORDE.ID
+		INNER JOIN CUSTOMERS AS CUST
+			ON ORDE.CUSTOMER_ID = CUST.ID
+		INNER JOIN PRODUCTS AS PROD
+			ON ORIT.PRODUCT_ID = PROD.ID
+	WHERE
+		CUST.ID = @ID_CUSTOMER
+		AND DATEDIFF(MM, ORDE.ORDER_DATE, GETDATE()) <= 6
+	
+	UPDATE @TABLE_TOP_FIVE_CUSTOMERS SET CHECKED = 1 WHERE CUSTOMER_ID = @ID_CUSTOMER
+END
+
+SELECT * FROM @TABLE_PURCHASE_DETAILS
