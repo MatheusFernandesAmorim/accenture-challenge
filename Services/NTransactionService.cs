@@ -20,7 +20,9 @@ namespace AccentureChallenge.Services
                 {
                     if (transaction.Id == id)
                     {
-                        return transaction;
+                        Transactions.Add(transaction);
+
+                        return Transactions;
                     }
                 }
             }
